@@ -1,5 +1,10 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+<<<<<<< HEAD
+=======
+import { ClerkProvider } from "@clerk/nextjs";
+import { ConvexClientProvider } from "./ConvexClientProvider";
+>>>>>>> 5f9e116 (authentication setup using clerk and database setup using convex)
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,6 +23,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
+<<<<<<< HEAD
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
@@ -27,3 +33,16 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
+=======
+    <ClerkProvider>
+      <html lang="en">
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        >
+          <ConvexClientProvider>{children}</ConvexClientProvider>
+        </body>
+      </html>
+    </ClerkProvider>
+  );
+}
+>>>>>>> 5f9e116 (authentication setup using clerk and database setup using convex)
