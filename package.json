@@ -9,26 +9,22 @@
     "lint": "eslint"
   },
   "dependencies": {
-<<<<<<< HEAD
-=======
     "@clerk/nextjs": "^6.31.4",
+    "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.3",
->>>>>>> 5f9e116 (authentication setup using clerk and database setup using convex)
+    "@radix-ui/react-tabs": "^1.1.13",
     "@tabler/icons-react": "^3.34.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cobe": "^0.6.4",
-<<<<<<< HEAD
-    "lucide-react": "^0.541.0",
-    "motion": "^12.23.12",
-=======
     "convex": "^1.26.1",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.541.0",
->>>>>>> 5f9e116 (authentication setup using clerk and database setup using convex)
+    "motion": "^12.23.12",
     "next": "15.5.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-dropzone": "^14.3.8",
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
