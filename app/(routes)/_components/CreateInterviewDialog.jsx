@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React ,{useState} from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +17,15 @@ import ResumeUpload from "./ResumeUpload";
 import { DialogClose } from "@radix-ui/react-dialog";
 
 function CreateInterviewDialog() {
+const [formData,setFormData]=useState();
+  const onHandleInputChange=()=>{
+    setFormData(()=>(
+      {
+        ...formData,
+        [field]:value
+      }
+    ))
+  }
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -38,7 +47,7 @@ function CreateInterviewDialog() {
             <ResumeUpload/>
           </TabsContent>
           <TabsContent value="job-description">
-            <JobDescription/>
+            <JobDescription onHandleInputChange={onHandleInputChange}/>
           </TabsContent>
         </Tabs>
         <DialogFooter className='flex gap-6'>
