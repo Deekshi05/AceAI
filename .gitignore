@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# n8n data (contains sensitive workflow data, credentials, and encryption keys)
+n8n-data/
+
 # vercel
 .vercel
 
