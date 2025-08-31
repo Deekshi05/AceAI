@@ -14,25 +14,17 @@ export async function POST(request) {
     // Parse the form data
     const formData = await request.formData();
     const file = formData.get('file');
+    const jobTitle = formData.get('jobTitle');
+    const jobDescription = formData.get('jobDescription');
     
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
-
-    // Convert file to buffer
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // Clean up empty strings from frontend
+    const cleanJobTitle = jobTitle && jobTitle.trim() !== '' ? jobTitle.trim() : null;
+    const cleanJobDescription = jobDescription && jobDescription.trim() !== '' ? jobDescription.trim() : null;
     
-    // Upload to ImageKit
-    const uploadResponse = await imageKit.upload({
-      file: buffer,
-      fileName: file.name,
-      folder: '/resumes/',
-    });
+    let uploadResponse = null;
+    let webhookPayload = {};
 
-    console.log('File uploaded to ImageKit:', uploadResponse.url);
-
-    // Send the ImageKit URL to your n8n webhook
+    // Send the data to your n8n webhook
     // TODO: Update this URL to match your actual n8n webhook URL
     // You can find this in your n8n workflow by checking the webhook node
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/YOUR_WEBHOOK_ID';
@@ -43,30 +35,79 @@ export async function POST(request) {
     } catch (healthError) {
       console.error('n8n service is not reachable:', healthError.message);
       return NextResponse.json({
-        success: true,
-        imageKitUrl: uploadResponse.url,
-        error: 'File uploaded successfully, but n8n service is not running. Please start n8n service using: docker-compose up -d',
+        success: false,
+        error: 'n8n service is not running. Please start n8n service using: docker-compose up -d',
         questions: null,
       });
     }
+
+    // Check if we have a valid file (not empty string)
+    const hasValidFile = file && file.size > 0 && file.name && file.name.trim() !== '';
+
+    if (hasValidFile) {
+      // Convert file to buffer
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      
+      // Upload to ImageKit
+      uploadResponse = await imageKit.upload({
+        file: buffer,
+        fileName: file.name,
+        folder: '/resumes/',
+      });
     
-    try {
-      const n8nResponse = await axios.post(n8nWebhookUrl, {
+      console.log('File uploaded to ImageKit:', uploadResponse.url);
+      
+      // Prepare webhook payload with resume URL
+      webhookPayload = {
         resumeUrl: uploadResponse.url,
         fileName: file.name,
-      }, {
+        jobTitle: cleanJobTitle,
+        jobDescription: cleanJobDescription,
+      };
+      
+      console.log('Generating questions based on resume', cleanJobTitle || cleanJobDescription ? 'with additional job details' : '');
+    } else {
+      // Prepare webhook payload with job details only
+      webhookPayload = {
+        resumeUrl: null,
+        fileName: null,
+        jobTitle: cleanJobTitle,
+        jobDescription: cleanJobDescription,
+      };
+      
+      console.log('Generating questions based on job title and description only');
+    }
+    
+    try {
+      const n8nResponse = await axios.post(n8nWebhookUrl, webhookPayload, {
         headers: {
           'Content-Type': 'application/json',
         },
         timeout: 120000, // Increased to 2 minutes timeout for AI processing
       });
 
-      console.log('n8n response:', n8nResponse.data);
+      console.log('n8n response received');
+      console.log('Type of response:', typeof n8nResponse.data);
+      console.log('Is array:', Array.isArray(n8nResponse.data));
+      console.log('Number of questions:', n8nResponse.data?.length);
+
+      // Extract questions and answers from the array structure
+      const interviewQuestions = n8nResponse.data;
+
+      // Log first question to verify structure
+      if (interviewQuestions && interviewQuestions.length > 0) {
+        console.log('First question sample:', {
+          question: interviewQuestions[0].question?.substring(0, 100) + '...',
+          answer: interviewQuestions[0].answer?.substring(0, 100) + '...'
+        });
+      }
 
       return NextResponse.json({
         success: true,
-        imageKitUrl: uploadResponse.url,
-        questions: n8nResponse.data,
+        imageKitUrl: uploadResponse?.url || null,
+        questions: interviewQuestions,
+        processingType: file ? 'resume-based' : 'job-description-based',
       });
     } catch (n8nError) {
       console.error('n8n webhook error:', n8nError.message);
@@ -81,11 +122,10 @@ export async function POST(request) {
         errorMessage = 'n8n webhook URL not found. Please check your webhook configuration.';
       }
       
-      // Return success with ImageKit URL even if n8n fails
-      return NextResponse.json({
-        success: true,
-        imageKitUrl: uploadResponse.url,
-        error: `File uploaded but ${errorMessage}`,
+      // Return appropriate response based on whether file was uploaded
+      const response = {
+        success: false,
+        error: `${file ? 'File uploaded but ' : ''}${errorMessage}`,
         n8nError: n8nError.response?.data || n8nError.message,
         suggestions: [
           'Check if n8n is running: docker-compose ps',
@@ -93,7 +133,13 @@ export async function POST(request) {
           'Verify webhook URL in your n8n workflow',
           'Check n8n logs: docker-compose logs n8n'
         ]
-      });
+      };
+
+      if (file && uploadResponse) {
+        response.imageKitUrl = uploadResponse.url;
+      }
+
+      return NextResponse.json(response);
     }
 
   } catch (error) {

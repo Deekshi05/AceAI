@@ -16,11 +16,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import JobDescription from "./JobDescription";
 import ResumeUpload from "./ResumeUpload";
 import { DialogClose } from "@radix-ui/react-dialog";
+import { Loader2Icon } from "lucide-react";
+import { useUserDetailContext } from "@/app/Provider";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 function CreateInterviewDialog() {
 const [formData,setFormData]=useState({});
 const [file,setFiles]=useState();
 const[loading,setLoading]=useState(false);
+const { UserDetail } = useUserDetailContext();
+const saveInterviewQuestion=useMutation(api.interview.saveInterviewQuestion);
   const onHandleInputChange=(field, value)=>{
     setFormData((prev)=>(
       {
@@ -31,13 +37,48 @@ const[loading,setLoading]=useState(false);
   }
 
   const onSubmit=async ()=>{
-    if(!file)return;
+    // Check if we have either a file OR job description
+    if(!file && (!formData?.jobTitle || !formData?.jobDescription)){
+      alert("Please either upload a resume OR provide job title and description");
+      return;
+    }
+    
+    // Debug user context
+    console.log('UserDetail:', UserDetail);
+    console.log('UserDetail._id:', UserDetail?._id);
+    
+    if (!UserDetail?._id) {
+      alert("User not authenticated. Please sign in first.");
+      return;
+    }
+    
     setLoading(true);
-    const formData=new FormData();
-    formData.append("file",file);
+    const formData_=new FormData();
+    formData_.append('file',file??'');
+    formData_.append('jobTitle',formData?.jobTitle || '');
+    formData_.append("jobDescription",formData?.jobDescription || '');
+    
     try{
-      const res=await axios.post('/api/generate-interview-questions',formData);
+      const res=await axios.post('/api/generate-interview-questions',formData_);
       console.log(res.data);
+      if (!res.data?.questions || !Array.isArray(res.data.questions) || res.data.questions.length === 0) {
+        alert("Failed to generate interview questions. Please try again or check your input.");
+        setLoading(false);
+        return;
+      }
+      // Ensure each question object is { question, answer }
+      const mappedQuestions = res.data.questions.map(q => ({
+        question: q.question ?? q.answer ?? '',
+        answer: q.answer ?? q.question ?? ''
+      }));
+      const resp=await saveInterviewQuestion({
+        questions: mappedQuestions,
+        resumeUrl:res.data?.imageKitUrl || undefined,
+        uid:UserDetail?._id,
+        jobTitle:formData?.jobTitle,
+        jobDescription:formData?.jobDescription
+      });
+      console.log(resp);
     }catch(e){
       console.log(e);
     }
@@ -51,30 +92,36 @@ const[loading,setLoading]=useState(false);
       <DialogTrigger asChild>
         <Button>+Create Interview</Button>
       </DialogTrigger>
-      <DialogContent className='min-w-3xl'>
+      <DialogContent className='max-w-2xl max-h-[90vh] overflow-y-auto'>
         <DialogHeader>
           <DialogTitle>Please submit following details</DialogTitle>
           <DialogDescription>
             Choose how you want to create your interview
           </DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue="resume-upload" className="w-full mt-5">
+        <Tabs defaultValue="resume-upload" className="w-full mt-3">
           <TabsList>
             <TabsTrigger value="resume-upload">Resume Upload</TabsTrigger>
             <TabsTrigger value="job-description">Job Description</TabsTrigger>
           </TabsList>
           <TabsContent value="resume-upload">
-            <ResumeUpload setFiles={(file)=>setFiles(file)}/>
+            <ResumeUpload setFiles={(file)=>setFiles(file)} onHandleInputChange={onHandleInputChange}/>
           </TabsContent>
           <TabsContent value="job-description">
             <JobDescription onHandleInputChange={onHandleInputChange}/>
           </TabsContent>
         </Tabs>
-        <DialogFooter className='flex gap-6'>
+        <DialogFooter className='flex gap-4 mt-4'>
          <DialogClose asChild>
           <Button variant={'ghost'}>Cancel</Button>
          </DialogClose>
-         <Button onClick={onSubmit} disabled={loading|| !file}>Submit</Button>
+         <Button 
+           onClick={onSubmit} 
+           disabled={loading || (!file && (!formData?.jobTitle || !formData?.jobDescription))}
+         >
+           {loading && <Loader2Icon className="animate-spin"/>}
+           Submit
+         </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

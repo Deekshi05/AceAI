@@ -7,4 +7,15 @@ export default defineSchema({
     email: v.string(),
     imageUrl: v.optional(v.string()),
   }).index("by_email", ["email"]),
+
+  InterviewSessionTable: defineTable({
+    interviewQuestions: v.any(),
+    resumeUrl: v.optional(v.string()),
+    jobTitle: v.optional(v.string()),
+    jobDescription: v.optional(v.string()),
+    userId: v.string(),
+    status: v.string(),
+    startTime: v.optional(v.number()),
+    endTime: v.optional(v.number()),
+  })
 });
