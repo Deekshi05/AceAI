@@ -1,4 +1,5 @@
 "use client";
+import {useRouter} from 'next/navigation';
 import React, { useState } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ const [file,setFiles]=useState();
 const[loading,setLoading]=useState(false);
 const { UserDetail } = useUserDetailContext();
 const saveInterviewQuestion=useMutation(api.interview.saveInterviewQuestion);
+  const router=useRouter();
   const onHandleInputChange=(field, value)=>{
     setFormData((prev)=>(
       {
@@ -61,6 +63,11 @@ const saveInterviewQuestion=useMutation(api.interview.saveInterviewQuestion);
     try{
       const res=await axios.post('/api/generate-interview-questions',formData_);
       console.log(res.data);
+      if(res?.data?.status==429){
+        console.log(res?.data?.result);
+        return;
+      }
+      
       if (!res.data?.questions || !Array.isArray(res.data.questions) || res.data.questions.length === 0) {
         alert("Failed to generate interview questions. Please try again or check your input.");
         setLoading(false);
@@ -78,7 +85,7 @@ const saveInterviewQuestion=useMutation(api.interview.saveInterviewQuestion);
         jobTitle:formData?.jobTitle,
         jobDescription:formData?.jobDescription
       });
-      console.log(resp);
+      router.push('/interview/'+resp);
     }catch(e){
       console.log(e);
     }

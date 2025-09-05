@@ -1,8 +1,7 @@
-version: '3.8'
-
 services:
   n8n:
-    image: n8nio/n8n
+    image: n8nio/n8n:latest
+    container_name: n8n_persistent
     ports:
       - "5678:5678"
     environment:
@@ -12,6 +11,23 @@ services:
       - NODE_ENV=production
       - WEBHOOK_URL=http://localhost:5678/
       - GENERIC_TIMEZONE=Asia/Kolkata
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - DB_SQLITE_POOL_SIZE=1
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_DISABLE_UI=false
+      - N8N_SECURE_COOKIE=false
+      - N8N_LOG_LEVEL=info
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_METRICS=false
+      - N8N_PERSIST_BINARY_DATA=true
+      - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
     volumes:
       - ./n8n-data:/home/node/.n8n
-    restart: always
+      - ./n8n-data/backups:/backups
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
