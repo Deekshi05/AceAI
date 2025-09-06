@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { currentUser } from '@clerk/nextjs/server';
+import { aj } from '@/utils/arcjet';
 import ImageKit from 'imagekit';
 import axios from 'axios';
 
@@ -12,6 +14,7 @@ const imageKit = new ImageKit({
 export async function POST(request) {
   try {
     // Parse the form data
+    const user=await currentUser();
     const formData = await request.formData();
     const file = formData.get('file');
     const jobTitle = formData.get('jobTitle');
@@ -23,11 +26,24 @@ export async function POST(request) {
     
     let uploadResponse = null;
     let webhookPayload = {};
+    
+  const decision=await aj.protect(request,{userId:user?.primaryEmailAddress?.emailAddress??'',requested:5});
+
+  console.log(decision);
+  
+  if(decision?.reason?.remaining==0){
+    return NextResponse.json({
+      success: false,
+      error: 'Rate limit exceeded',
+      questions: null,
+    });
+  }
+
 
     // Send the data to your n8n webhook
     // TODO: Update this URL to match your actual n8n webhook URL
     // You can find this in your n8n workflow by checking the webhook node
-    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/YOUR_WEBHOOK_ID';
+    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook-test/generate-interview-questions';
     
     // Check if n8n service is reachable first
     try {
