@@ -3,6 +3,7 @@ import { currentUser } from '@clerk/nextjs/server';
 import { aj } from '@/utils/arcjet';
 import ImageKit from 'imagekit';
 import axios from 'axios';
+import {auth,currentUser} from "@clerk/nextjs/server";
 
 // Initialize ImageKit
 const imageKit = new ImageKit({
@@ -19,7 +20,7 @@ export async function POST(request) {
     const file = formData.get('file');
     const jobTitle = formData.get('jobTitle');
     const jobDescription = formData.get('jobDescription');
-    
+    const {has}=await auth();
     // Clean up empty strings from frontend
     const cleanJobTitle = jobTitle && jobTitle.trim() !== '' ? jobTitle.trim() : null;
     const cleanJobDescription = jobDescription && jobDescription.trim() !== '' ? jobDescription.trim() : null;
@@ -30,8 +31,9 @@ export async function POST(request) {
   const decision=await aj.protect(request,{userId:user?.primaryEmailAddress?.emailAddress??'',requested:5});
 
   console.log(decision);
-  
-  if(decision?.reason?.remaining==0){
+  const isSubscribedUser=has({plan:'pro'});
+
+  if(decision?.reason?.remaining==0&&!isSubscribedUser){
     return NextResponse.json({
       success: false,
       error: 'Rate limit exceeded',
