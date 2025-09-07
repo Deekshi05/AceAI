@@ -15,6 +15,7 @@ import { useInterviewLogic } from "./hooks/useInterviewLogic";
 import ChatMessage from "./components/ChatMessage";
 import VoiceInput from "./components/VoiceInput";
 import WebcamPanel from "./components/WebcamPanel";
+import WaveformVisualizer from "./components/WaveformVisualizer";
 
 function StartInterview() {
   const { interviewid } = useParams();
@@ -40,22 +41,22 @@ function StartInterview() {
     initializeSpeechRecognition();
   }, [interviewid]);
 
-  useEffect(() => {
-    if (interviewData?.interviewQuestions && conversation.length === 0) {
-      addQuestionToChat(0);
-    }
-  }, [interviewData]);
+  // Remove auto-question adding - questions will be added when answered
+  // useEffect(() => {
+  //   if (interviewData?.interviewQuestions && conversation.length === 0) {
+  //     addQuestionToChat(0);
+  //   }
+  // }, [interviewData]);
 
-  // Auto-speak new questions
-  useEffect(() => {
-    const lastMessage = conversation[conversation.length - 1];
-    if (lastMessage && lastMessage.type === "question" && !isSpeaking) {
-      // Small delay to ensure the UI is ready
-      setTimeout(() => {
-        handleSpeakQuestion(lastMessage.content);
-      }, 500);
-    }
-  }, [conversation]);
+  // Auto-speak removed - questions are hidden by default
+  // useEffect(() => {
+  //   const lastMessage = conversation[conversation.length - 1];
+  //   if (lastMessage && lastMessage.type === "question" && !isSpeaking) {
+  //     setTimeout(() => {
+  //       handleSpeakQuestion(lastMessage.content);
+  //     }, 500);
+  //   }
+  // }, [conversation]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -101,8 +102,8 @@ function StartInterview() {
     stopRecording(recognition);
   };
 
-  const handleSubmitAnswer = () => {
-    if (submitAnswer(currentTranscript, currentQuestionIndex)) {
+  const handleSubmitAnswer = (answer) => {
+    if (submitAnswer(answer || currentTranscript, currentQuestionIndex)) {
       setCurrentTranscript("");
       setIsRecording(false);
     }
@@ -136,68 +137,126 @@ function StartInterview() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
-          {/* Chat Interface */}
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-lg flex flex-col">
+        <div className="flex gap-6 h-[calc(100vh-200px)]">
+          {/* Left Side Container - Current Question + Webcam */}
+          <div className="w-80 flex-shrink-0 flex flex-col gap-4">
+            {/* Current Question Controls */}
+            {interviewData?.interviewQuestions &&
+              currentQuestionIndex <
+                interviewData.interviewQuestions.length && (
+                <div className="border border-gray-200 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg flex-shrink-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                        <BotIcon className="w-3 h-3 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-900">
+                          Question {currentQuestionIndex + 1} of{" "}
+                          {interviewData.interviewQuestions.length}
+                        </h4>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Question Controls */}
+                  <WaveformVisualizer
+                    text={
+                      interviewData.interviewQuestions[currentQuestionIndex]
+                        ?.question || ""
+                    }
+                    isSpeaking={isSpeaking}
+                    onSpeak={handleSpeakQuestion}
+                    onStopSpeaking={handleStopSpeaking}
+                    showControls={true}
+                  />
+                </div>
+              )}
+
+            {/* Webcam Panel - Takes remaining space */}
+            <div className="flex-1">
+              <WebcamPanel
+                webcamOn={webcamOn}
+                setWebcamOn={setWebcamOn}
+                interviewData={interviewData}
+                currentQuestionIndex={currentQuestionIndex}
+              />
+            </div>
+          </div>
+
+          {/* Chat Interface - Right Side - Takes remaining space */}
+          <div className="flex-1 bg-gradient-to-b from-gray-50 to-white rounded-xl shadow-lg flex flex-col border border-gray-200 max-w-4xl">
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-200">
+            <div className="p-4 border-b border-gray-200 bg-white rounded-t-xl flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <BotIcon className="w-8 h-8 text-blue-600 mr-3" />
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mr-3 shadow-lg">
+                    <BotIcon className="w-5 h-5 text-white" />
+                  </div>
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900">
-                      AI Interviewer
+                      AI Interview Chat
                     </h2>
-                    <p className="text-sm text-gray-500">
-                      Interactive Interview Session
-                    </p>
+                    <div className="text-sm text-gray-500 flex items-center">
+                      <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+                      Active session
+                    </div>
                   </div>
                 </div>
-                <div className="text-sm text-gray-500">
-                  {conversation.filter((msg) => msg.type === "answer").length}{" "}
-                  answered
+                <div className="text-right">
+                  <div className="text-sm font-medium text-gray-700">
+                    Progress:{" "}
+                    {conversation.filter((msg) => msg.type === "answer").length}{" "}
+                    / {interviewData?.interviewQuestions?.length || 0}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Questions answered
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            {/* Chat Messages - Increased size for better visibility */}
+            <div
+              className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0"
+              style={{ minHeight: "60vh" }}
+            >
+              {/* Chat History - Previous Q&A */}
               {conversation.map((message, index) => (
-                <div
+                <ChatMessage
                   key={index}
-                  className={`flex ${
-                    message.type === "answer"
-                      ? "justify-end"
-                      : message.type === "question"
-                        ? "justify-center"
-                        : "justify-center"
-                  }`}
-                >
-                  <ChatMessage
-                    message={message}
-                    isSpeaking={isSpeaking}
-                    onSpeak={handleSpeakQuestion}
-                    onStopSpeaking={handleStopSpeaking}
-                  />
-                </div>
+                  message={message}
+                  isSpeaking={isSpeaking}
+                  onSpeak={handleSpeakQuestion}
+                  onStopSpeaking={handleStopSpeaking}
+                />
               ))}
 
-              {/* Welcome message if no conversation yet */}
-              {conversation.length === 0 && (
-                <div className="flex justify-center items-center h-full">
-                  <div className="text-center text-gray-500">
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <BotIcon className="w-8 h-8 text-blue-600" />
+              {/* Welcome message if no conversation yet and no questions */}
+              {conversation.length === 0 &&
+                !interviewData?.interviewQuestions && (
+                  <div className="flex justify-center items-center h-32">
+                    <div className="text-center text-gray-500">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <BotIcon className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <h3 className="text-sm font-medium mb-1">
+                        Loading Interview...
+                      </h3>
+                      <div className="flex justify-center space-x-1 mt-2">
+                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
+                        <div
+                          className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
+                          style={{ animationDelay: "0.1s" }}
+                        ></div>
+                        <div
+                          className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                      </div>
                     </div>
-                    <h3 className="text-lg font-medium mb-2">
-                      Interview Starting...
-                    </h3>
-                    <p className="text-sm">
-                      Your AI interviewer will ask questions shortly
-                    </p>
                   </div>
-                </div>
-              )}
+                )}
 
               <div ref={chatEndRef} />
             </div>
@@ -205,23 +264,17 @@ function StartInterview() {
             {/* Voice Input */}
             {currentQuestionIndex <
               (interviewData?.interviewQuestions?.length || 0) && (
-              <VoiceInput
-                currentTranscript={currentTranscript}
-                isRecording={isRecording}
-                onStartRecording={handleStartRecording}
-                onStopRecording={handleStopRecording}
-                onSubmit={handleSubmitAnswer}
-              />
+              <div className="flex-shrink-0">
+                <VoiceInput
+                  currentTranscript={currentTranscript}
+                  isRecording={isRecording}
+                  onStartRecording={handleStartRecording}
+                  onStopRecording={handleStopRecording}
+                  onSubmit={handleSubmitAnswer}
+                />
+              </div>
             )}
           </div>
-
-          {/* Webcam Panel */}
-          <WebcamPanel
-            webcamOn={webcamOn}
-            setWebcamOn={setWebcamOn}
-            interviewData={interviewData}
-            currentQuestionIndex={currentQuestionIndex}
-          />
         </div>
       </div>
     </div>
