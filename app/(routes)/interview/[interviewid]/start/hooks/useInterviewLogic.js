@@ -21,31 +21,48 @@ export const useInterviewLogic = (
 
   const submitAnswer = (currentTranscript, currentQuestionIndex) => {
     if (currentTranscript.trim()) {
-      // Add user's answer to conversation
-      setConversation((prev) => [
-        ...prev,
-        {
-          type: "answer",
-          content: currentTranscript.trim(),
-          timestamp: new Date(),
-        },
-      ]);
+      // First add the current question to chat
+      const currentQuestion =
+        interviewData?.interviewQuestions?.[currentQuestionIndex];
+      if (currentQuestion) {
+        setConversation((prev) => [
+          ...prev,
+          {
+            type: "question",
+            content: currentQuestion.question,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+
+      // Then add user's answer to conversation
+      setTimeout(() => {
+        setConversation((prev) => [
+          ...prev,
+          {
+            type: "answer",
+            content: currentTranscript.trim(),
+            timestamp: new Date(),
+          },
+        ]);
+      }, 300);
 
       // Move to next question if available
       const nextIndex = currentQuestionIndex + 1;
       if (nextIndex < (interviewData?.interviewQuestions?.length || 0)) {
         setCurrentQuestionIndex(nextIndex);
-        setTimeout(() => addQuestionToChat(nextIndex), 500);
       } else {
         // Interview completed
-        setConversation((prev) => [
-          ...prev,
-          {
-            type: "system",
-            content: "Interview completed! Thank you for your responses.",
-            timestamp: new Date(),
-          },
-        ]);
+        setTimeout(() => {
+          setConversation((prev) => [
+            ...prev,
+            {
+              type: "system",
+              content: "🎉 Interview completed! Thank you for your responses.",
+              timestamp: new Date(),
+            },
+          ]);
+        }, 600);
       }
 
       return true; // Success

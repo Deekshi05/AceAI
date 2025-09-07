@@ -17,7 +17,7 @@ const WaveformVisualizer = ({
 
   // Generate random waveform data for visualization
   const generateWaveformData = (isActive = false) => {
-    const dataArray = new Array(32).fill(0); // Reduced for wider bars
+    const dataArray = new Array(16).fill(0); // Reduced for small waveform
     if (isActive) {
       for (let i = 0; i < dataArray.length; i++) {
         // Create vertical movement only - each bar oscillates independently
@@ -48,43 +48,36 @@ const WaveformVisualizer = ({
     const height = canvas.height;
 
     // Clear canvas with dark background
-    ctx.fillStyle = "#0f1419";
+    ctx.fillStyle = "#1f2937";
     ctx.fillRect(0, 0, width, height);
 
     // Generate waveform data
     const dataArray = generateWaveformData(isSpeaking);
-    const barWidth = (width / dataArray.length) * 0.7; // 70% width for bars
+    const barWidth = (width / dataArray.length) * 0.6; // 60% width for bars
     const spacing = width / dataArray.length; // Total space per bar including spacing
 
     // Draw bars - each bar stays in its fixed horizontal position
     for (let i = 0; i < dataArray.length; i++) {
-      const barHeight = (dataArray[i] / 255) * height * 0.9;
+      const barHeight = (dataArray[i] / 255) * height * 0.8;
       const x = i * spacing + (spacing - barWidth) / 2; // Fixed horizontal position
       const y = (height - barHeight) / 2; // Center the bars vertically
 
-      // Create gradient for each bar based on position and activity
+      // Create gradient for each bar based on activity
       const gradient = ctx.createLinearGradient(x, y + barHeight, x, y);
 
       if (isSpeaking) {
-        // Active state - blue gradient from dark to light
+        // Active state - blue gradient
         const intensity = dataArray[i] / 255;
         if (intensity > 0.7) {
-          gradient.addColorStop(0, "#1e40af"); // Dark blue
-          gradient.addColorStop(0.5, "#3b82f6"); // Medium blue
-          gradient.addColorStop(1, "#60a5fa"); // Light blue
-        } else if (intensity > 0.4) {
-          gradient.addColorStop(0, "#1e3a8a"); // Darker blue
-          gradient.addColorStop(0.5, "#2563eb"); // Medium blue
-          gradient.addColorStop(1, "#3b82f6"); // Light blue
+          gradient.addColorStop(0, "#1e40af");
+          gradient.addColorStop(1, "#60a5fa");
         } else {
-          gradient.addColorStop(0, "#1e293b"); // Very dark blue
-          gradient.addColorStop(0.5, "#1e40af"); // Dark blue
-          gradient.addColorStop(1, "#2563eb"); // Medium blue
+          gradient.addColorStop(0, "#1e3a8a");
+          gradient.addColorStop(1, "#3b82f6");
         }
       } else {
         // Idle state - subtle gray gradient
         gradient.addColorStop(0, "#374151");
-        gradient.addColorStop(0.5, "#4b5563");
         gradient.addColorStop(1, "#6b7280");
       }
 
@@ -92,23 +85,8 @@ const WaveformVisualizer = ({
 
       // Draw rounded rectangle
       ctx.beginPath();
-      ctx.roundRect(x, y, barWidth, barHeight, barWidth / 4);
+      ctx.roundRect(x, y, barWidth, barHeight, barWidth / 6);
       ctx.fill();
-
-      // Add glow effect for active bars
-      if (isSpeaking && dataArray[i] > 180) {
-        ctx.shadowColor = "#3b82f6";
-        ctx.shadowBlur = 8;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-
-        ctx.beginPath();
-        ctx.roundRect(x, y, barWidth, barHeight, barWidth / 4);
-        ctx.fill();
-
-        // Reset shadow
-        ctx.shadowBlur = 0;
-      }
     }
   };
 
@@ -136,121 +114,68 @@ const WaveformVisualizer = ({
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl p-6 border border-slate-200 shadow-xl">
-      {/* Header with Speaker Icon */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-4">
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3">
+      <div className="flex items-center justify-between">
+        {/* Speaker with Small Waveform */}
+        <div className="flex items-center space-x-3">
           <div
-            className={`p-3 rounded-full transition-all duration-300 ${
+            className={`p-2 rounded-full transition-all duration-300 cursor-pointer ${
               isSpeaking
-                ? "bg-blue-500 text-white shadow-lg scale-110 animate-pulse"
-                : "bg-white text-blue-500 shadow-md border border-blue-200"
+                ? "bg-blue-500 text-white shadow-lg animate-pulse"
+                : "bg-gray-100 text-blue-500 hover:bg-blue-50 border border-gray-200"
             }`}
+            onClick={handleSpeakToggle}
+            title={isSpeaking ? "Stop speaking" : "Play question"}
           >
-            <Volume2
-              className={`w-6 h-6 transition-transform duration-300 ${
-                isSpeaking ? "animate-bounce" : ""
-              }`}
+            {isSpeaking ? (
+              <VolumeX className="w-4 h-4" />
+            ) : (
+              <Volume2 className="w-4 h-4" />
+            )}
+          </div>
+
+          {/* Small Waveform */}
+          <div className="relative">
+            <canvas
+              ref={canvasRef}
+              width={200}
+              height={40}
+              className="w-24 h-5 rounded bg-gray-800"
             />
           </div>
-          <div>
-            <h3 className="font-bold text-gray-800 text-lg">
-              🤖 AI Interviewer
-            </h3>
-            <p className="text-sm text-gray-600 flex items-center">
-              <div
-                className={`w-2 h-2 rounded-full mr-2 ${isSpeaking ? "bg-green-400 animate-pulse" : "bg-gray-400"}`}
-              ></div>
-              {isSpeaking ? "Speaking..." : "Ready to speak"}
-            </p>
+
+          <div className="text-xs text-gray-600">
+            {isSpeaking ? "Playing..." : "Question ready"}
           </div>
         </div>
 
+        {/* View Question Toggle */}
         {showControls && (
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setShowText(!showText)}
-              className="p-2 rounded-lg bg-white/70 hover:bg-white transition-colors duration-200 text-gray-600 hover:text-gray-800"
-              title={showText ? "Hide text" : "Show text"}
-            >
-              {showText ? (
-                <EyeOff className="w-4 h-4" />
-              ) : (
-                <Eye className="w-4 h-4" />
-              )}
-            </button>
-            <button
-              onClick={handleSpeakToggle}
-              className={`p-2 rounded-lg transition-all duration-200 ${
-                isSpeaking
-                  ? "bg-red-500 hover:bg-red-600 text-white"
-                  : "bg-blue-500 hover:bg-blue-600 text-white"
-              }`}
-              title={isSpeaking ? "Stop speaking" : "Start speaking"}
-            >
-              {isSpeaking ? (
-                <VolumeX className="w-4 h-4" />
-              ) : (
-                <Volume2 className="w-4 h-4" />
-              )}
-            </button>
-          </div>
+          <button
+            onClick={() => setShowText(!showText)}
+            className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200 text-gray-600 hover:text-gray-800 border border-gray-200"
+            title={showText ? "Hide question" : "View question"}
+          >
+            {showText ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
+          </button>
         )}
       </div>
 
-      {/* Waveform Canvas */}
-      <div className="relative mb-4">
-        <canvas
-          ref={canvasRef}
-          width={600}
-          height={120}
-          className="w-full h-24 rounded-xl bg-gray-900 border border-gray-700 shadow-inner"
-        />
-
-        {/* Overlay text when speaking */}
-        {isSpeaking && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="bg-blue-500/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-blue-400/30">
-              <span className="text-blue-300 font-medium text-sm flex items-center">
-                <Volume2 className="w-4 h-4 mr-2 animate-pulse" />
-                Audio Playing...
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Text Display (toggleable) */}
+      {/* Question Text (toggleable) */}
       {showText && (
-        <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-200">
-          <div className="flex items-start space-x-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Volume2 className="w-4 h-4 text-blue-600" />
+        <div className="mt-3 bg-blue-50 rounded-lg p-3 border border-blue-100">
+          <div className="flex items-start space-x-2">
+            <div className="p-1 bg-blue-100 rounded">
+              <Volume2 className="w-3 h-3 text-blue-600" />
             </div>
             <div className="flex-1">
-              <h4 className="font-medium text-gray-800 mb-2">
-                Interview Question
-              </h4>
-              <p className="text-gray-700 leading-relaxed">{text}</p>
+              <p className="text-gray-700 text-sm leading-relaxed">{text}</p>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Audio Controls Info */}
-      {!showText && (
-        <div className="text-center">
-          <p className="text-sm text-gray-600 mb-2">
-            {isSpeaking
-              ? "🔊 Audio is playing"
-              : "Click the speaker to hear the question"}
-          </p>
-          <button
-            onClick={() => setShowText(true)}
-            className="text-xs text-blue-600 hover:text-blue-800 underline"
-          >
-            or click the eye icon to read the text
-          </button>
         </div>
       )}
     </div>

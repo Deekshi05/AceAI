@@ -1,29 +1,41 @@
 import arcjet, { detectBot, shield, tokenBucket } from "@arcjet/next";
 import { isSpoofedBot } from "@arcjet/inspect";
 import { NextResponse } from "next/server";
-import {aj} from "@/utils/arcjet";
+import { aj } from "@/utils/arcjet";
 
 export async function GET(req) {
-  const decision = await aj.protect(req, { requested: 5 }); // Deduct 5 tokens from the bucket
+  // In development, request fewer tokens or use a smaller amount
+  const isDevelopment = process.env.NODE_ENV === "development";
+  const tokensToRequest = isDevelopment ? 1 : 5; // Request only 1 token in development
+
+  const decision = await aj.protect(req, { requested: tokensToRequest });
   console.log("Arcjet decision", decision);
 
-  if (decision.isDenied()) {
+  // In development mode, don't block requests even if denied
+  if (decision.isDenied() && !isDevelopment) {
     if (decision.reason.isRateLimit()) {
       return NextResponse.json(
         { error: "Too Many Requests", reason: decision.reason },
-        { status: 429 },
+        { status: 429 }
       );
     } else if (decision.reason.isBot()) {
       return NextResponse.json(
         { error: "No bots allowed", reason: decision.reason },
-        { status: 403 },
+        { status: 403 }
       );
     } else {
       return NextResponse.json(
         { error: "Forbidden", reason: decision.reason },
-        { status: 403 },
+        { status: 403 }
       );
     }
+  }
+
+  // In development, always continue even if decision is denied (for testing)
+  if (isDevelopment && decision.isDenied()) {
+    console.log(
+      "🚧 Development mode: Allowing denied request for testing purposes"
+    );
   }
 
   // Requests from hosting IPs are likely from bots, so they can usually be
@@ -33,7 +45,7 @@ export async function GET(req) {
   if (decision.ip.isHosting()) {
     return NextResponse.json(
       { error: "Forbidden", reason: decision.reason },
-      { status: 403 },
+      { status: 403 }
     );
   }
 
@@ -44,7 +56,7 @@ export async function GET(req) {
   if (decision.results.some(isSpoofedBot)) {
     return NextResponse.json(
       { error: "Forbidden", reason: decision.reason },
-      { status: 403 },
+      { status: 403 }
     );
   }
 

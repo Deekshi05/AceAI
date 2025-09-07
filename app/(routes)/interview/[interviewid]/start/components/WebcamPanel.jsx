@@ -10,39 +10,40 @@ const WebcamPanel = ({
   currentQuestionIndex,
 }) => {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col">
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Video</h2>
-        <p className="text-gray-600 text-sm">
+    <div className="bg-white rounded-xl shadow-lg p-4 flex flex-col h-full">
+      <div className="mb-3 flex-shrink-0">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">Video</h2>
+        <p className="text-gray-600 text-xs">
           Monitor yourself during the interview
         </p>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center">
+      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
         {webcamOn ? (
-          <div className="w-full">
-            <Webcam
-              onUserMedia={() => setWebcamOn(true)}
-              onUserMediaError={() => setWebcamOn(false)}
-              className="w-full rounded-lg border-2 border-gray-200 shadow-md"
-              style={{ aspectRatio: "4/3" }}
-            />
-            <div className="mt-4 text-center">
+          <div className="w-full h-full flex flex-col">
+            <div className="flex-1">
+              <Webcam
+                onUserMedia={() => setWebcamOn(true)}
+                onUserMediaError={() => setWebcamOn(false)}
+                className="w-full h-full object-cover rounded-lg border-2 border-gray-200 shadow-md"
+              />
+            </div>
+            <div className="mt-3 text-center flex-shrink-0">
               <Button
                 variant="outline"
                 onClick={() => setWebcamOn(false)}
-                className="px-4 py-2"
+                className="px-4 py-2 text-sm"
               >
                 Turn Off Camera
               </Button>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center space-y-4 w-full">
-            <div className="bg-gray-100 rounded-xl p-8 border-2 border-dashed border-gray-300 w-full aspect-video flex items-center justify-center">
-              <WebcamIcon className="h-16 w-16 text-gray-400" />
+          <div className="flex flex-col items-center space-y-3 w-full h-full justify-center">
+            <div className="bg-gray-100 rounded-xl p-6 border-2 border-dashed border-gray-300 w-full flex-1 flex items-center justify-center max-h-48">
+              <WebcamIcon className="h-12 w-12 text-gray-400" />
             </div>
-            <div className="text-center space-y-2">
+            <div className="text-center space-y-2 flex-shrink-0">
               <h3 className="text-sm font-semibold text-gray-900">
                 Camera Off
               </h3>

@@ -1,35 +1,71 @@
 import React from "react";
-import { UserIcon } from "lucide-react";
+import { UserIcon, BotIcon, Clock } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
 
 const ChatMessage = ({ message, isSpeaking, onSpeak, onStopSpeaking }) => {
+  const formatTime = () => {
+    return new Date().toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   if (message.type === "question") {
     return (
-      <div className="w-full max-w-4xl">
-        <WaveformVisualizer
-          text={message.content}
-          isSpeaking={isSpeaking}
-          onSpeak={onSpeak}
-          onStopSpeaking={onStopSpeaking}
-          showControls={true}
-        />
+      <div className="flex items-start space-x-3 mb-3">
+        {/* AI Avatar */}
+        <div className="flex-shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-sm">
+            <BotIcon className="w-4 h-4 text-white" />
+          </div>
+        </div>
+
+        {/* Message Content */}
+        <div className="flex-1 max-w-2xl">
+          {/* Header */}
+          <div className="flex items-center space-x-2 mb-1">
+            <span className="text-sm font-medium text-gray-700">
+              AI Interviewer
+            </span>
+            <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
+            <span className="text-xs text-gray-400">{formatTime()}</span>
+          </div>
+
+          {/* Message Bubble */}
+          <div className="bg-white rounded-lg rounded-tl-sm border border-gray-200 shadow-sm p-3">
+            <p className="text-gray-800 text-sm leading-relaxed">
+              {message.content}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (message.type === "answer") {
     return (
-      <div className="flex items-start max-w-3xl">
-        <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-4 text-white shadow-lg mr-3 relative">
-          <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-          <p className="leading-relaxed">{message.content}</p>
-          <div className="flex items-center mt-2 text-green-100">
-            <UserIcon className="w-4 h-4 mr-1" />
-            <span className="text-xs">Your Answer</span>
+      <div className="flex items-start space-x-3 mb-3 justify-end">
+        {/* Message Content */}
+        <div className="flex-1 max-w-2xl">
+          {/* Header */}
+          <div className="flex items-center justify-end space-x-2 mb-1">
+            <span className="text-xs text-gray-400">{formatTime()}</span>
+            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+            <span className="text-sm font-medium text-gray-700">You</span>
+          </div>
+
+          {/* Message Bubble */}
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg rounded-tr-sm text-white shadow-sm p-3">
+            <p className="text-sm leading-relaxed">{message.content}</p>
           </div>
         </div>
-        <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full flex items-center justify-center border-2 border-green-200">
-          <UserIcon className="w-4 h-4 text-green-600" />
+
+        {/* User Avatar */}
+        <div className="flex-shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-sm">
+            <UserIcon className="w-4 h-4 text-white" />
+          </div>
         </div>
       </div>
     );
@@ -37,14 +73,14 @@ const ChatMessage = ({ message, isSpeaking, onSpeak, onStopSpeaking }) => {
 
   if (message.type === "system") {
     return (
-      <div className="w-full max-w-2xl mx-auto">
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 text-center shadow-sm">
-          <div className="flex items-center justify-center mb-2">
-            <div className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></div>
-            <span className="text-blue-700 font-medium text-sm">
+      <div className="flex justify-center mb-3">
+        <div className="bg-gray-100 border border-gray-200 rounded-full px-3 py-1 shadow-sm">
+          <div className="flex items-center space-x-2">
+            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
+            <span className="text-gray-600 font-medium text-xs">
               {message.content}
             </span>
-            <div className="w-2 h-2 bg-blue-400 rounded-full ml-2 animate-pulse"></div>
+            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
           </div>
         </div>
       </div>
