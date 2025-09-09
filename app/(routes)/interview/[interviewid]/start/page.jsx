@@ -13,7 +13,7 @@ import {
 } from "@/utils/speechUtils";
 import { useInterviewLogic } from "./hooks/useInterviewLogic";
 import ChatMessage from "./components/ChatMessage";
-import VoiceInput from "./components/VoiceInput";
+import VoiceInputSimplified from "./components/VoiceInputSimplified";
 import WebcamPanel from "./components/WebcamPanel";
 import WaveformVisualizer from "./components/WaveformVisualizer";
 
@@ -265,7 +265,7 @@ function StartInterview() {
             {currentQuestionIndex <
               (interviewData?.interviewQuestions?.length || 0) && (
               <div className="flex-shrink-0">
-                <VoiceInput
+                <VoiceInputSimplified
                   currentTranscript={currentTranscript}
                   isRecording={isRecording}
                   onStartRecording={handleStartRecording}
