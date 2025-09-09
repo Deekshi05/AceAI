@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { ArrowRightIcon, Send } from "lucide-react";
 function Interview({ params }) {
   const router = useRouter();
+  const resolvedParams = React.use(params);
 
   const handleStartInterview = () => {
-    router.push(`/interview/${params.interviewid}/start`);
+    router.push(`/interview/${resolvedParams.interviewid}/start`);
   };
   return (
     <div className="flex flex-col items-center justify-center mt-24">

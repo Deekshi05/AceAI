@@ -75,3 +75,64 @@ export const getUserInterviews = query({
     return res;
   },
 });
+
+export const addUserResponse = mutation({
+  args: {
+    interviewId: v.id("InterviewSessionTable"),
+    questionIndex: v.number(),
+    question: v.string(),
+    expectedAnswer: v.optional(v.string()),
+    userAnswer: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) {
+      throw new Error("Interview not found");
+    }
+
+    const currentResponses = interview.userResponses || [];
+    const newResponse = {
+      questionIndex: args.questionIndex,
+      question: args.question,
+      expectedAnswer: args.expectedAnswer,
+      userAnswer: args.userAnswer,
+      timestamp: Date.now(),
+    };
+
+    const updatedResponses = [...currentResponses, newResponse];
+
+    await ctx.db.patch(args.interviewId, {
+      userResponses: updatedResponses,
+    });
+
+    return newResponse;
+  },
+});
+
+export const updateResponseWithFeedback = mutation({
+  args: {
+    interviewId: v.id("InterviewSessionTable"),
+    questionIndex: v.number(),
+    feedback: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) {
+      throw new Error("Interview not found");
+    }
+
+    const userResponses = interview.userResponses || [];
+    const updatedResponses = userResponses.map((response) => {
+      if (response.questionIndex === args.questionIndex) {
+        return { ...response, feedback: args.feedback };
+      }
+      return response;
+    });
+
+    await ctx.db.patch(args.interviewId, {
+      userResponses: updatedResponses,
+    });
+
+    return updatedResponses;
+  },
+});

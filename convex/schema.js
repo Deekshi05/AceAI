@@ -17,5 +17,17 @@ export default defineSchema({
     status: v.string(),
     startTime: v.optional(v.number()),
     endTime: v.optional(v.number()),
-  })
+    userResponses: v.optional(
+      v.array(
+        v.object({
+          questionIndex: v.number(),
+          question: v.string(),
+          expectedAnswer: v.optional(v.string()),
+          userAnswer: v.string(),
+          feedback: v.optional(v.string()),
+          timestamp: v.number(),
+        })
+      )
+    ),
+  }),
 });
