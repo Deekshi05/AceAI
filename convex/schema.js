@@ -17,6 +17,9 @@ export default defineSchema({
     status: v.string(),
     startTime: v.optional(v.number()),
     endTime: v.optional(v.number()),
+    lastActivityTime: v.optional(v.number()),
+    isTimedOut: v.optional(v.boolean()),
+    timeoutReason: v.optional(v.string()),
     userResponses: v.optional(
       v.array(
         v.object({
@@ -25,6 +28,17 @@ export default defineSchema({
           expectedAnswer: v.optional(v.string()),
           userAnswer: v.string(),
           feedback: v.optional(v.string()),
+          timestamp: v.number(),
+        })
+      )
+    ),
+    aiInteractions: v.optional(
+      v.array(
+        v.object({
+          type: v.string(), // "query" or "feedback"
+          userQuery: v.optional(v.string()),
+          aiResponse: v.string(),
+          questionIndex: v.optional(v.number()),
           timestamp: v.number(),
         })
       )

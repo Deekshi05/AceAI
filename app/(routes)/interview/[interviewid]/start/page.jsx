@@ -2,7 +2,7 @@
 import { api } from "@/convex/_generated/api";
 import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import { useConvex } from "convex/react";
+import { useConvex, useMutation } from "convex/react";
 import { BotIcon, Volume2 } from "lucide-react";
 import {
   setupSpeechRecognition,
@@ -16,11 +16,24 @@ import ChatMessage from "./components/ChatMessage";
 import VoiceInputSimplified from "./components/VoiceInputSimplified";
 import WebcamPanel from "./components/WebcamPanel";
 import WaveformVisualizer from "./components/WaveformVisualizer";
+import FeedbackDisplay from "./components/FeedbackDisplay";
+import InterviewTimer from "./components/InterviewTimer";
+import InterviewBlocked from "./components/InterviewBlocked";
+import { Button } from "@/components/ui/button";
 
 function StartInterview() {
   const { interviewid } = useParams();
   const convex = useConvex();
+  const updateInterviewStatus = useMutation(
+    api.interview.updateInterviewStatus
+  );
+  const updateLastActivity = useMutation(api.interview.updateLastActivity);
+  const checkInterviewTimeout = useMutation(
+    api.interview.checkInterviewTimeout
+  );
   const [interviewData, setInterviewData] = useState(null);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockReason, setBlockReason] = useState(null);
   const [webcamOn, setWebcamOn] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [conversation, setConversation] = useState([]);
@@ -28,9 +41,11 @@ function StartInterview() {
   const [currentTranscript, setCurrentTranscript] = useState("");
   const [recognition, setRecognition] = useState(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isAILoading, setIsAILoading] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const chatEndRef = useRef(null);
 
-  const { addQuestionToChat, submitAnswer } = useInterviewLogic(
+  const { addQuestionToChat, submitAnswer, submitAIQuery } = useInterviewLogic(
     interviewData,
     setConversation,
     setCurrentQuestionIndex
@@ -40,6 +55,16 @@ function StartInterview() {
     GetInterviewQuestions();
     initializeSpeechRecognition();
   }, [interviewid]);
+
+  // Cleanup speech recognition on unmount
+  useEffect(() => {
+    return () => {
+      if (recognition) {
+        recognition.stop();
+      }
+      stopSpeaking();
+    };
+  }, [recognition]);
 
   // Remove auto-question adding - questions will be added when answered
   // useEffect(() => {
@@ -63,10 +88,60 @@ function StartInterview() {
   }, [conversation]);
 
   const GetInterviewQuestions = async () => {
-    const res = await convex.query(api.interview.getInterviewById, {
-      interviewId: interviewid,
-    });
-    setInterviewData(res);
+    try {
+      // First check if interview is timed out
+      const timeoutCheck = await checkInterviewTimeout({
+        interviewId: interviewid,
+      });
+
+      if (timeoutCheck.isTimedOut || timeoutCheck.status === "timed-out") {
+        setInterviewData(timeoutCheck);
+        setIsBlocked(true);
+        setBlockReason("timed-out");
+        return;
+      }
+
+      const res = await convex.query(api.interview.getInterviewById, {
+        interviewId: interviewid,
+      });
+      setInterviewData(res);
+
+      // Check if interview was started but needs to be blocked
+      if (res && res.status === "in-progress" && res.startTime) {
+        const now = Date.now();
+        const timeSinceStart = now - res.startTime;
+        const oneHour = 60 * 60 * 1000;
+
+        // If more than 1 hour has passed since start, block the interview
+        if (timeSinceStart > oneHour) {
+          await updateInterviewStatus({
+            interviewId: interviewid,
+            status: "timed-out",
+          });
+          setIsBlocked(true);
+          setBlockReason("timed-out");
+          return;
+        }
+      }
+
+      // Mark interview as in-progress when user accesses the interview
+      if (res && (res.status === "scheduled" || !res.status)) {
+        try {
+          await updateInterviewStatus({
+            interviewId: interviewid,
+            status: "in-progress",
+          });
+          // Update last activity time
+          await updateLastActivity({
+            interviewId: interviewid,
+          });
+        } catch (error) {
+          console.error("Error updating interview status:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching interview:", error);
+    }
   };
 
   const initializeSpeechRecognition = () => {
@@ -95,71 +170,172 @@ function StartInterview() {
     setCurrentTranscript("");
     if (startRecording(recognition)) {
       setIsRecording(true);
+      trackActivity(); // Track activity when user starts recording
     }
   };
 
   const handleStopRecording = () => {
     stopRecording(recognition);
+    trackActivity(); // Track activity when user stops recording
   };
 
-  const handleSubmitAnswer = (answer) => {
+  const handleSubmitAnswer = async (answer) => {
     if (submitAnswer(answer || currentTranscript, currentQuestionIndex)) {
       setCurrentTranscript("");
       setIsRecording(false);
+
+      // Update last activity time
+      try {
+        await updateLastActivity({
+          interviewId: interviewid,
+        });
+      } catch (error) {
+        console.error("Error updating last activity:", error);
+      }
+
+      // Check if all questions are answered and mark as completed
+      const nextQuestionIndex = currentQuestionIndex + 1;
+      const totalQuestions = interviewData?.interviewQuestions?.length || 0;
+
+      if (nextQuestionIndex >= totalQuestions) {
+        try {
+          await updateInterviewStatus({
+            interviewId: interviewid,
+            status: "completed",
+          });
+          console.log("Interview marked as completed");
+        } catch (error) {
+          console.error("Error marking interview as completed:", error);
+        }
+      }
     }
   };
+
+  const handleTimeout = async () => {
+    try {
+      await updateInterviewStatus({
+        interviewId: interviewid,
+        status: "timed-out",
+      });
+      setIsBlocked(true);
+      setBlockReason("timed-out");
+    } catch (error) {
+      console.error("Error handling timeout:", error);
+    }
+  };
+
+  const trackActivity = async () => {
+    try {
+      await updateLastActivity({
+        interviewId: interviewid,
+      });
+    } catch (error) {
+      console.error("Error tracking activity:", error);
+    }
+  };
+
+  const handleAIQuery = async (query) => {
+    setIsAILoading(true);
+    try {
+      // Add user query to chat first
+      setConversation((prev) => [
+        ...prev,
+        {
+          type: "ai-query",
+          userQuery: query,
+          aiResponse: "AI is processing your query...",
+          timestamp: new Date(),
+          isLoading: true,
+        },
+      ]);
+
+      const aiResponse = await submitAIQuery(query, currentQuestionIndex);
+
+      // Update the last message with the actual AI response
+      setConversation((prev) => {
+        const updated = [...prev];
+        const lastIndex = updated.length - 1;
+        if (updated[lastIndex] && updated[lastIndex].isLoading) {
+          updated[lastIndex] = {
+            type: "ai-query",
+            userQuery: query,
+            aiResponse: aiResponse,
+            timestamp: new Date(),
+          };
+        }
+        return updated;
+      });
+    } catch (error) {
+      console.error("Error getting AI response:", error);
+      // Update with error message
+      setConversation((prev) => {
+        const updated = [...prev];
+        const lastIndex = updated.length - 1;
+        if (updated[lastIndex] && updated[lastIndex].isLoading) {
+          updated[lastIndex] = {
+            type: "ai-query",
+            userQuery: query,
+            aiResponse:
+              "Sorry, there was an error getting AI response. Please try again.",
+            timestamp: new Date(),
+          };
+        }
+        return updated;
+      });
+    } finally {
+      setIsAILoading(false);
+    }
+  };
+
+  // Show blocked screen if interview is blocked
+  if (isBlocked) {
+    return <InterviewBlocked interview={interviewData} reason={blockReason} />;
+  }
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="flex items-center justify-center mb-3">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mr-3 shadow-lg">
-              <BotIcon className="w-6 h-6 text-white" />
+          <h1 className="font-bold text-3xl text-gray-800 mb-3">
+            AI Interview Session
+          </h1>
+
+          <div className="flex items-center justify-center space-x-6 mb-4">
+            <div className="bg-white rounded-lg px-4 py-2 shadow-sm border">
+              <p className="text-gray-600 font-medium">
+                Question {currentQuestionIndex + 1} of{" "}
+                {interviewData?.interviewQuestions?.length || 0}
+              </p>
             </div>
-            <h1 className="font-bold text-3xl bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              AI Interview Session
-            </h1>
+
+            {isSpeaking && (
+              <div className="inline-flex items-center space-x-2 text-blue-600 bg-blue-50 rounded-lg px-3 py-2">
+                <Volume2 className="w-4 h-4" />
+                <span className="font-medium">AI is speaking</span>
+              </div>
+            )}
           </div>
-          <div className="flex items-center justify-center space-x-2">
-            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-            <p className="text-gray-600 font-medium">
-              Question {currentQuestionIndex + 1} of{" "}
-              {interviewData?.interviewQuestions?.length || 0}
-            </p>
-            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-          </div>
-          {isSpeaking && (
-            <div className="mt-2 flex items-center justify-center space-x-2 text-blue-600">
-              <Volume2 className="w-4 h-4 animate-pulse" />
-              <span className="text-sm font-medium">AI is speaking...</span>
-            </div>
-          )}
         </div>
 
         <div className="flex gap-6 h-[calc(100vh-200px)]">
-          {/* Left Side Container - Current Question + Webcam */}
-          <div className="w-80 flex-shrink-0 flex flex-col gap-4">
-            {/* Current Question Controls */}
+          {/* Left Side - Question, Timer, and Webcam */}
+          <div className="w-72 flex-shrink-0 flex flex-col gap-4">
+            {/* Interview Timer */}
+            <InterviewTimer
+              startTime={interviewData?.startTime}
+              onTimeout={handleTimeout}
+              isActive={interviewData?.status === "in-progress"}
+            />
+
+            {/* Current Question */}
             {interviewData?.interviewQuestions &&
               currentQuestionIndex <
                 interviewData.interviewQuestions.length && (
-                <div className="border border-gray-200 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg flex-shrink-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                        <BotIcon className="w-3 h-3 text-white" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-semibold text-gray-900">
-                          Question {currentQuestionIndex + 1} of{" "}
-                          {interviewData.interviewQuestions.length}
-                        </h4>
-                      </div>
-                    </div>
-                  </div>
+                <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">
+                    Current Question
+                  </h4>
 
-                  {/* Question Controls */}
                   <WaveformVisualizer
                     text={
                       interviewData.interviewQuestions[currentQuestionIndex]
@@ -173,7 +349,7 @@ function StartInterview() {
                 </div>
               )}
 
-            {/* Webcam Panel - Takes remaining space */}
+            {/* Webcam */}
             <div className="flex-1">
               <WebcamPanel
                 webcamOn={webcamOn}
@@ -184,44 +360,39 @@ function StartInterview() {
             </div>
           </div>
 
-          {/* Chat Interface - Right Side - Takes remaining space */}
-          <div className="flex-1 bg-gradient-to-b from-gray-50 to-white rounded-xl shadow-lg flex flex-col border border-gray-200 max-w-4xl">
+          {/* Chat Interface */}
+          <div className="flex-1 bg-white rounded-lg shadow-sm flex flex-col border border-gray-200">
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-200 bg-white rounded-t-xl flex-shrink-0">
+            <div className="p-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mr-3 shadow-lg">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center mr-3">
                     <BotIcon className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900">
-                      AI Interview Chat
+                      Interview Chat
                     </h2>
-                    <div className="text-sm text-gray-500 flex items-center">
-                      <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
-                      Active session
-                    </div>
+                    <p className="text-sm text-gray-600">
+                      Interactive AI Assistant
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-medium text-gray-700">
-                    Progress:{" "}
+                  <div className="text-lg font-semibold text-gray-800">
                     {conversation.filter((msg) => msg.type === "answer").length}{" "}
                     / {interviewData?.interviewQuestions?.length || 0}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Questions answered
-                  </div>
+                  <div className="text-sm text-gray-500">Answered</div>
                 </div>
               </div>
             </div>
 
-            {/* Chat Messages - Increased size for better visibility */}
+            {/* Chat Messages */}
             <div
-              className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0"
+              className="flex-1 overflow-y-auto p-4 space-y-3"
               style={{ minHeight: "60vh" }}
             >
-              {/* Chat History - Previous Q&A */}
               {conversation.map((message, index) => (
                 <ChatMessage
                   key={index}
@@ -232,28 +403,20 @@ function StartInterview() {
                 />
               ))}
 
-              {/* Welcome message if no conversation yet and no questions */}
+              {/* Empty state */}
               {conversation.length === 0 &&
                 !interviewData?.interviewQuestions && (
                   <div className="flex justify-center items-center h-32">
                     <div className="text-center text-gray-500">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <BotIcon className="w-5 h-5 text-blue-600" />
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                        <BotIcon className="w-6 h-6 text-blue-600" />
                       </div>
-                      <h3 className="text-sm font-medium mb-1">
-                        Loading Interview...
+                      <h3 className="text-lg font-medium text-gray-700">
+                        Loading Interview Questions
                       </h3>
-                      <div className="flex justify-center space-x-1 mt-2">
-                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
-                        <div
-                          className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.1s" }}
-                        ></div>
-                        <div
-                          className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.2s" }}
-                        ></div>
-                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Please wait while we prepare your interview
+                      </p>
                     </div>
                   </div>
                 )}
@@ -264,19 +427,28 @@ function StartInterview() {
             {/* Voice Input */}
             {currentQuestionIndex <
               (interviewData?.interviewQuestions?.length || 0) && (
-              <div className="flex-shrink-0">
+              <div className="border-t border-gray-200 bg-gray-50 rounded-b-lg">
                 <VoiceInputSimplified
                   currentTranscript={currentTranscript}
                   isRecording={isRecording}
                   onStartRecording={handleStartRecording}
                   onStopRecording={handleStopRecording}
                   onSubmit={handleSubmitAnswer}
+                  onAskAI={handleAIQuery}
+                  isAILoading={isAILoading}
                 />
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Feedback Display Modal */}
+      <FeedbackDisplay
+        interviewId={interviewid}
+        isOpen={showFeedback}
+        onClose={() => setShowFeedback(false)}
+      />
     </div>
   );
 }
