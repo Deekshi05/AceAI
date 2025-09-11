@@ -22,7 +22,7 @@ import { useUserDetailContext } from "@/app/Provider";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
-function CreateInterviewDialog() {
+function CreateInterviewDialog({ onInterviewCreated }) {
   const [formData, setFormData] = useState({});
   const [file, setFiles] = useState();
   const [loading, setLoading] = useState(false);
@@ -117,6 +117,12 @@ function CreateInterviewDialog() {
 
       console.log("Interview saved successfully with ID:", resp);
       toast.success("Interview created successfully!");
+
+      // Call the callback to refresh the interview list
+      if (onInterviewCreated) {
+        onInterviewCreated();
+      }
+
       router.push("/interview/" + resp);
     } catch (e) {
       console.error("Error saving interview:", e);

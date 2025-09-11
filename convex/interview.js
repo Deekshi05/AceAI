@@ -136,3 +136,145 @@ export const updateResponseWithFeedback = mutation({
     return updatedResponses;
   },
 });
+
+export const addAIInteraction = mutation({
+  args: {
+    interviewId: v.id("InterviewSessionTable"),
+    type: v.string(), // "query" or "feedback"
+    userQuery: v.optional(v.string()),
+    aiResponse: v.string(),
+    questionIndex: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) {
+      throw new Error("Interview not found");
+    }
+
+    const currentInteractions = interview.aiInteractions || [];
+    const newInteraction = {
+      type: args.type,
+      userQuery: args.userQuery,
+      aiResponse: args.aiResponse,
+      questionIndex: args.questionIndex,
+      timestamp: Date.now(),
+    };
+
+    const updatedInteractions = [...currentInteractions, newInteraction];
+
+    await ctx.db.patch(args.interviewId, {
+      aiInteractions: updatedInteractions,
+    });
+
+    return newInteraction;
+  },
+});
+
+export const getAIInteractions = query({
+  args: {
+    interviewId: v.id("InterviewSessionTable"),
+  },
+  handler: async (ctx, args) => {
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) {
+      throw new Error("Interview not found");
+    }
+    return interview.aiInteractions || [];
+  },
+});
+
+export const updateInterviewStatus = mutation({
+  args: {
+    interviewId: v.id("InterviewSessionTable"),
+    status: v.string(), // "scheduled", "in-progress", "completed"
+  },
+  handler: async (ctx, args) => {
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) {
+      throw new Error("Interview not found");
+    }
+
+    const updateData = { status: args.status };
+
+    // If marking as in-progress, set startTime if not already set
+    if (args.status === "in-progress" && !interview.startTime) {
+      updateData.startTime = Date.now();
+    }
+
+    // If marking as completed, set endTime
+    if (args.status === "completed") {
+      updateData.endTime = Date.now();
+    }
+
+    await ctx.db.patch(args.interviewId, updateData);
+    return await ctx.db.get(args.interviewId);
+  },
+});
+
+export const updateLastActivity = mutation({
+  args: {
+    interviewId: v.id("InterviewSessionTable"),
+  },
+  handler: async (ctx, args) => {
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) {
+      throw new Error("Interview not found");
+    }
+
+    await ctx.db.patch(args.interviewId, {
+      lastActivityTime: Date.now(),
+    });
+
+    return await ctx.db.get(args.interviewId);
+  },
+});
+
+export const checkInterviewTimeout = mutation({
+  args: {
+    interviewId: v.id("InterviewSessionTable"),
+  },
+  handler: async (ctx, args) => {
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) {
+      throw new Error("Interview not found");
+    }
+
+    // If already timed out or completed, return current status
+    if (interview.isTimedOut || interview.status === "completed") {
+      return interview;
+    }
+
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
+    const lastActivity = interview.lastActivityTime || interview.startTime;
+
+    // Check if interview has been inactive for more than 1 hour
+    if (lastActivity && now - lastActivity > oneHour) {
+      await ctx.db.patch(args.interviewId, {
+        status: "timed-out",
+        isTimedOut: true,
+        timeoutReason: "Inactive for more than 1 hour",
+        endTime: now,
+      });
+
+      return await ctx.db.get(args.interviewId);
+    }
+
+    return interview;
+  },
+});
+
+export const deleteInterview = mutation({
+  args: {
+    interviewId: v.id("InterviewSessionTable"),
+  },
+  handler: async (ctx, args) => {
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview) {
+      throw new Error("Interview not found");
+    }
+
+    await ctx.db.delete(args.interviewId);
+    return { success: true, deletedId: args.interviewId };
+  },
+});

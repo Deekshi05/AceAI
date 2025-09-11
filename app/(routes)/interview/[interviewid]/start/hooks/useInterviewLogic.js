@@ -1,7 +1,11 @@
 // Interview logic hooks and utilities
 import { api } from "@/convex/_generated/api";
 import { useConvex } from "convex/react";
-import { processUserResponse, processN8nResponse } from "@/utils/feedbackUtils";
+import {
+  processUserResponse,
+  processUserQuery,
+  processN8nResponse,
+} from "@/utils/feedbackUtils";
 
 export const useInterviewLogic = (
   interviewData,
@@ -114,6 +118,14 @@ export const useInterviewLogic = (
             questionIndex: currentQuestionIndex,
             feedback: processedResponse.content,
           });
+
+          // Also store as AI interaction for tracking
+          await convex.mutation(api.interview.addAIInteraction, {
+            interviewId: interviewData._id,
+            type: "feedback",
+            aiResponse: processedResponse.content,
+            questionIndex: currentQuestionIndex,
+          });
         }
         // Handle hints - show to user
         else if (processedResponse.type === "hint") {
@@ -131,6 +143,14 @@ export const useInterviewLogic = (
               },
             ]);
           }, 300);
+
+          // Store hint as AI interaction
+          await convex.mutation(api.interview.addAIInteraction, {
+            interviewId: interviewData._id,
+            type: "hint",
+            aiResponse: processedResponse.content,
+            questionIndex: currentQuestionIndex,
+          });
         }
       } catch (error) {
         console.error("Error processing response:", error);
@@ -176,8 +196,51 @@ export const useInterviewLogic = (
     return false; // No transcript to submit
   };
 
+  const submitAIQuery = async (userQuery, currentQuestionIndex) => {
+    try {
+      console.log("=== AI Query Submission Started ===");
+      console.log("User Query:", userQuery);
+      console.log("Question Index:", currentQuestionIndex);
+
+      const currentQuestion =
+        interviewData?.interviewQuestions?.[currentQuestionIndex];
+
+      if (!currentQuestion) {
+        throw new Error("No current question available");
+      }
+
+      // Call AI for clarification
+      const aiResponse = await processUserQuery(
+        userQuery,
+        currentQuestion.question,
+        interviewData._id,
+        currentQuestionIndex
+      );
+
+      const processedResponse = processN8nResponse(aiResponse);
+
+      // Store AI interaction in Convex
+      await convex.mutation(api.interview.addAIInteraction, {
+        interviewId: interviewData._id,
+        type: "query",
+        userQuery: userQuery,
+        aiResponse: processedResponse.content,
+        questionIndex: currentQuestionIndex,
+      });
+
+      console.log("AI provided clarification:", processedResponse.content);
+      console.log("=== AI Query Submission Completed ===");
+
+      return processedResponse.content;
+    } catch (error) {
+      console.error("Error processing AI query:", error);
+      throw error;
+    }
+  };
+
   return {
     addQuestionToChat,
     submitAnswer,
+    submitAIQuery,
   };
 };
