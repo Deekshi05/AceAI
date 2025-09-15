@@ -1,7 +1,9 @@
+version: "3.8"
+
 services:
   n8n:
     image: n8nio/n8n:latest
-    container_name: n8n_persistent
+    container_name: n8n_app
     ports:
       - "5678:5678"
     environment:
@@ -22,12 +24,32 @@ services:
       - N8N_PERSIST_BINARY_DATA=true
       - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
     volumes:
-      - ./n8n-data:/home/node/.n8n
-      - ./n8n-data/backups:/backups
+      - n8n_data:/home/node/.n8n
+      - n8n_backups:/backups
     restart: unless-stopped
+    networks:
+      - n8n_network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5678/healthz",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  n8n_data:
+    driver: local
+  n8n_backups:
+    driver: local
+
+networks:
+  n8n_network:
+    driver: bridge

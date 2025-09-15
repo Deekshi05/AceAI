@@ -4,49 +4,43 @@ import axios from "axios";
 // Function to test n8n webhook connectivity
 export const testN8nConnection = async () => {
   try {
-    // Test health endpoint
-    const healthResponse = await axios.get("http://localhost:5678/healthz", {
-      timeout: 3000,
-    });
+    // Test webhook endpoint directly (no health check needed)
+    const webhookUrl =
+      process.env.N8N_AI_FEEDBACK_WEBHOOK_URL ||
+      "http://localhost:5678/webhook/generate-feedback";
 
-    if (healthResponse.status === 200) {
-      console.log("✅ n8n service is running");
+    // Use proxy URL to avoid CORS
+    const proxyUrl = webhookUrl.replace("http://localhost:5678", "/api/n8n");
 
-      // Test webhook endpoint with a simple ping
-      const webhookUrl =
-        process.env.N8N_AI_FEEDBACK_WEBHOOK_URL ||
-        "http://localhost:5678/webhook/generate-feedback";
+    const testData = {
+      type: "test_connection",
+      message: "Testing webhook connectivity",
+      timestamp: new Date().toISOString(),
+    };
 
-      const testData = {
-        type: "test_connection",
-        message: "Testing webhook connectivity",
-        timestamp: new Date().toISOString(),
-      };
+    try {
+      const webhookResponse = await axios.post(proxyUrl, testData, {
+        headers: { "Content-Type": "application/json" },
+        timeout: 5000,
+        validateStatus: (status) => status < 500,
+      });
 
-      try {
-        const webhookResponse = await axios.post(webhookUrl, testData, {
-          headers: { "Content-Type": "application/json" },
-          timeout: 5000,
-          validateStatus: (status) => status < 500,
-        });
-
-        if (webhookResponse.status < 400) {
-          console.log("✅ n8n webhook is responding");
-          return { success: true, message: "n8n webhook is working correctly" };
-        } else {
-          console.log(`⚠️ Webhook returned status: ${webhookResponse.status}`);
-          return {
-            success: false,
-            message: `Webhook returned status: ${webhookResponse.status}`,
-          };
-        }
-      } catch (webhookError) {
-        console.log("❌ Webhook test failed:", webhookError.message);
+      if (webhookResponse.status < 400) {
+        console.log("✅ n8n webhook is responding");
+        return { success: true, message: "n8n webhook is working correctly" };
+      } else {
+        console.log(`⚠️ Webhook returned status: ${webhookResponse.status}`);
         return {
           success: false,
-          message: `Webhook test failed: ${webhookError.message}`,
+          message: `Webhook returned status: ${webhookResponse.status}`,
         };
       }
+    } catch (webhookError) {
+      console.log("❌ Webhook test failed:", webhookError.message);
+      return {
+        success: false,
+        message: `Webhook test failed: ${webhookError.message}`,
+      };
     }
   } catch (error) {
     console.log("❌ n8n service is not accessible:", error.message);
@@ -73,9 +67,13 @@ export const processUserResponse = async (
   };
 
   try {
-    return await sendToN8nWebhook(requestData);
+    const result = await sendToN8nWebhook(requestData);
+    console.log("Successfully received response from n8n webhook");
+    return result;
   } catch (error) {
     console.warn("Webhook not available, providing fallback feedback");
+    console.error("Webhook error details:", error.message);
+
     // Provide a fallback feedback when webhook is not available
     return {
       type: "feedback",
@@ -102,9 +100,13 @@ export const processUserQuery = async (
   };
 
   try {
-    return await sendToN8nWebhook(requestData);
+    const result = await sendToN8nWebhook(requestData);
+    console.log("Successfully received query response from n8n webhook");
+    return result;
   } catch (error) {
     console.warn("Webhook not available, providing fallback response");
+    console.error("Webhook error details:", error.message);
+
     // Provide a fallback response when webhook is not available
     return {
       type: "clarification",
@@ -126,7 +128,7 @@ If you need more specific help, please try asking more detailed questions about 
 
 export const sendToN8nWebhook = async (questionData) => {
   try {
-    // Get the webhook URL from environment variables with fallback to production webhook
+    // Get the webhook URL from environment variables with fallback
     const webhookUrl =
       process.env.N8N_AI_FEEDBACK_WEBHOOK_URL ||
       `http://localhost:5678/webhook/generate-feedback`;
@@ -134,20 +136,11 @@ export const sendToN8nWebhook = async (questionData) => {
     console.log("Attempting to call n8n webhook:", webhookUrl);
     console.log("Request data:", questionData);
 
-    // First check if n8n service is running
-    try {
-      const healthCheck = await axios.get("http://localhost:5678/healthz", {
-        timeout: 3000,
-      });
-      if (healthCheck.status !== 200) {
-        throw new Error("n8n service is not healthy");
-      }
-    } catch (healthError) {
-      throw new Error(`n8n service is not accessible: ${healthError.message}`);
-    }
+    // Use Next.js API proxy to avoid CORS issues
+    const proxyUrl = webhookUrl.replace("http://localhost:5678", "/api/n8n");
 
     // Always use the generate-feedback endpoint, differentiate by type in data
-    const response = await axios.post(webhookUrl, questionData, {
+    const response = await axios.post(proxyUrl, questionData, {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
@@ -179,9 +172,8 @@ export const sendToN8nWebhook = async (questionData) => {
       console.warn(
         "n8n service appears to be unavailable. Make sure n8n is running on the specified port."
       );
-      throw new Error(
-        "n8n service is currently unavailable. Please ensure n8n Docker container is running."
-      );
+      // Don't throw error here, let it fall through to provide fallback
+      console.warn("Providing fallback response due to connectivity issues");
     }
 
     // Check if it's a webhook registration error
@@ -246,22 +238,25 @@ export const processN8nResponse = (response) => {
     const content =
       response.content || response.message || JSON.stringify(response);
 
+    // Ensure content is a string before calling toLowerCase
+    const contentStr = typeof content === "string" ? content : String(content);
+
     // If no type is specified, try to determine from content
     if (
-      content.toLowerCase().includes("feedback") ||
-      content.toLowerCase().includes("score") ||
-      content.toLowerCase().includes("rating")
+      contentStr.toLowerCase().includes("feedback") ||
+      contentStr.toLowerCase().includes("score") ||
+      contentStr.toLowerCase().includes("rating")
     ) {
       const processedResponse = {
         type: "feedback",
-        content: content,
+        content: contentStr,
       };
       console.log("AI Response auto-detected as feedback:", processedResponse);
       return processedResponse;
     } else {
       const processedResponse = {
         type: "hint",
-        content: content,
+        content: contentStr,
       };
       console.log("AI Response auto-detected as hint:", processedResponse);
       return processedResponse;
