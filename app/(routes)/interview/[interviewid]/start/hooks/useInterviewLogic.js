@@ -14,6 +14,43 @@ export const useInterviewLogic = (
 ) => {
   const convex = useConvex();
 
+  // Timer and interview termination logic
+  const terminateInterviewDueToTimeout = async () => {
+    try {
+      // Update interview status to timed-out
+      await convex.mutation(api.interview.updateInterviewStatus, {
+        interviewId: interviewData._id,
+        status: "timed-out",
+      });
+
+      // Add system message about timeout
+      setConversation((prev) => [
+        ...prev,
+        {
+          type: "system",
+          content:
+            "⏰ Interview session has timed out after 1 hour. Thank you for your participation.",
+          timestamp: new Date(),
+          isTimeout: true,
+        },
+      ]);
+
+      console.log("Interview automatically terminated due to 1-hour timeout");
+
+      // Redirect to dashboard after showing timeout message
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          window.location.href = "/dashboard";
+        }
+      }, 4000);
+
+      return true;
+    } catch (error) {
+      console.error("Error terminating interview due to timeout:", error);
+      return false;
+    }
+  };
+
   const addQuestionToChat = (questionIndex) => {
     const question = interviewData?.interviewQuestions?.[questionIndex];
     if (question) {
@@ -178,6 +215,18 @@ export const useInterviewLogic = (
       } else {
         // Interview completed
         console.log("Interview completed! All questions answered.");
+
+        // Update interview status to completed
+        try {
+          await convex.mutation(api.interview.updateInterviewStatus, {
+            interviewId: interviewData._id,
+            status: "completed",
+          });
+          console.log("Interview status updated to completed");
+        } catch (error) {
+          console.error("Error updating interview status:", error);
+        }
+
         setTimeout(() => {
           setConversation((prev) => [
             ...prev,
@@ -185,9 +234,17 @@ export const useInterviewLogic = (
               type: "system",
               content: "🎉 Interview completed! Thank you for your responses.",
               timestamp: new Date(),
+              isCompleted: true, // Flag to indicate completion
             },
           ]);
         }, 1200);
+
+        // Redirect to dashboard after showing completion message
+        setTimeout(() => {
+          if (typeof window !== "undefined") {
+            window.location.href = "/dashboard";
+          }
+        }, 3500);
       }
 
       console.log("=== User Response Submission Completed ===");
@@ -242,5 +299,6 @@ export const useInterviewLogic = (
     addQuestionToChat,
     submitAnswer,
     submitAIQuery,
+    terminateInterviewDueToTimeout,
   };
 };

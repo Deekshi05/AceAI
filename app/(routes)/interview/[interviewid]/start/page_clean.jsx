@@ -66,23 +66,6 @@ function StartInterview() {
     };
   }, [recognition]);
 
-  // Remove auto-question adding - questions will be added when answered
-  // useEffect(() => {
-  //   if (interviewData?.interviewQuestions && conversation.length === 0) {
-  //     addQuestionToChat(0);
-  //   }
-  // }, [interviewData]);
-
-  // Auto-speak removed - questions are hidden by default
-  // useEffect(() => {
-  //   const lastMessage = conversation[conversation.length - 1];
-  //   if (lastMessage && lastMessage.type === "question" && !isSpeaking) {
-  //     setTimeout(() => {
-  //       handleSpeakQuestion(lastMessage.content);
-  //     }, 500);
-  //   }
-  // }, [conversation]);
-
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation]);
@@ -213,63 +196,32 @@ function StartInterview() {
 
   const handleTimeout = async () => {
     try {
-      console.log("Interview timeout initiated - stopping all activities");
-
-      // Stop any ongoing recording
-      if (isRecording && recognition) {
-        try {
-          recognition.stop();
-          setIsRecording(false);
-          console.log("Stopped voice recording due to timeout");
-        } catch (error) {
-          console.warn("Error stopping recording:", error);
-        }
-      }
-
-      // Stop any ongoing speech
-      if (isSpeaking) {
-        try {
-          stopSpeaking();
-          setIsSpeaking(false);
-          console.log("Stopped speech synthesis due to timeout");
-        } catch (error) {
-          console.warn("Error stopping speech:", error);
-        }
-      }
-
       // Update interview status to timed-out
       await updateInterviewStatus({
         interviewId: interviewid,
         status: "timed-out",
       });
-      console.log("Interview status updated to timed-out");
+      console.log("Interview timed out");
 
-      // Show timeout message and redirect to dashboard
+      // Show completion message and redirect to dashboard
       setConversation((prev) => [
         ...prev,
         {
           type: "system",
           content:
-            "⏰ Interview session has automatically ended after 1 hour. Thank you for your participation! Redirecting to dashboard...",
+            "⏰ Interview session has timed out. Redirecting to dashboard...",
           timestamp: new Date(),
-          isTimeout: true,
         },
       ]);
 
-      // Redirect to dashboard after showing message
+      // Redirect to dashboard after 3 seconds
       setTimeout(() => {
         if (typeof window !== "undefined") {
           window.location.href = "/dashboard";
         }
-      }, 4000);
+      }, 3000);
     } catch (error) {
       console.error("Error handling timeout:", error);
-      // Fallback redirect if there's an error
-      setTimeout(() => {
-        if (typeof window !== "undefined") {
-          window.location.href = "/dashboard";
-        }
-      }, 2000);
     }
   };
 
@@ -409,95 +361,79 @@ function StartInterview() {
             </div>
           </div>
 
-          {/* Chat Interface */}
-          <div className="flex-1 bg-white rounded-lg shadow-sm flex flex-col border border-gray-200">
-            {/* Chat Header */}
-            <div className="p-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center mr-3">
-                    <BotIcon className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      Interview Chat
-                    </h2>
-                    <p className="text-sm text-gray-600">
-                      Interactive AI Assistant
+          {/* Right Side - Chat and Voice Input */}
+          <div className="flex-1 flex flex-col">
+            {/* Chat Messages */}
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 mb-4 flex-1 overflow-y-auto">
+              <div className="space-y-4">
+                {conversation.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <BotIcon className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">
+                      Start by answering the current question or ask AI for help
                     </p>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-semibold text-gray-800">
-                    {conversation.filter((msg) => msg.type === "answer").length}{" "}
-                    / {interviewData?.interviewQuestions?.length || 0}
-                  </div>
-                  <div className="text-sm text-gray-500">Answered</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Chat Messages */}
-            <div
-              className="flex-1 overflow-y-auto p-4 space-y-3"
-              style={{ minHeight: "60vh" }}
-            >
-              {conversation.map((message, index) => (
-                <ChatMessage
-                  key={index}
-                  message={message}
-                  isSpeaking={isSpeaking}
-                  onSpeak={handleSpeakQuestion}
-                  onStopSpeaking={handleStopSpeaking}
-                />
-              ))}
-
-              {/* Empty state */}
-              {conversation.length === 0 &&
-                !interviewData?.interviewQuestions && (
-                  <div className="flex justify-center items-center h-32">
-                    <div className="text-center text-gray-500">
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                        <BotIcon className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <h3 className="text-lg font-medium text-gray-700">
-                        Loading Interview Questions
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Please wait while we prepare your interview
-                      </p>
-                    </div>
-                  </div>
+                ) : (
+                  conversation.map((message, index) => (
+                    <ChatMessage
+                      key={index}
+                      message={message}
+                      onAIQuery={handleAIQuery}
+                      isAILoading={isAILoading}
+                    />
+                  ))
                 )}
-
-              <div ref={chatEndRef} />
+                <div ref={chatEndRef} />
+              </div>
             </div>
 
             {/* Voice Input */}
-            {currentQuestionIndex <
-              (interviewData?.interviewQuestions?.length || 0) && (
-              <div className="border-t border-gray-200 bg-gray-50 rounded-b-lg">
-                <VoiceInputSimplified
-                  currentTranscript={currentTranscript}
-                  isRecording={isRecording}
-                  onStartRecording={handleStartRecording}
-                  onStopRecording={handleStopRecording}
-                  onSubmit={handleSubmitAnswer}
-                  onAskAI={handleAIQuery}
-                  isAILoading={isAILoading}
-                />
-              </div>
-            )}
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+              <VoiceInputSimplified
+                isRecording={isRecording}
+                currentTranscript={currentTranscript}
+                onStartRecording={handleStartRecording}
+                onStopRecording={handleStopRecording}
+                onSubmitAnswer={handleSubmitAnswer}
+                disabled={
+                  currentQuestionIndex >=
+                  (interviewData?.interviewQuestions?.length || 0)
+                }
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Feedback Display Modal */}
-      <FeedbackDisplay
-        interviewId={interviewid}
-        isOpen={showFeedback}
-        onClose={() => setShowFeedback(false)}
-      />
+        {/* Show Interview Completion Status */}
+        {currentQuestionIndex >=
+          (interviewData?.interviewQuestions?.length || 0) && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md mx-4 text-center">
+              <div className="text-green-500 text-6xl mb-4">🎉</div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                Interview Completed!
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Thank you for completing the interview. You will be redirected
+                to your dashboard shortly.
+              </p>
+              <Button
+                onClick={() => (window.location.href = "/dashboard")}
+                className="w-full"
+              >
+                Go to Dashboard
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Feedback Display */}
+        <FeedbackDisplay
+          isOpen={showFeedback}
+          onClose={() => setShowFeedback(false)}
+          interviewId={interviewid}
+        />
+      </div>
     </div>
   );
 }

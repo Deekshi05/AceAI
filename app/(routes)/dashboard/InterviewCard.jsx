@@ -55,6 +55,16 @@ function InterviewCard({
   };
 
   const getInterviewStatus = () => {
+    // Return default status if interview is not available
+    if (!interview) {
+      return "scheduled";
+    }
+
+    // Check if interview is explicitly marked as completed
+    if (interview.status === "completed") {
+      return "completed";
+    }
+
     // Check if interview is timed out
     if (interview.isTimedOut || interview.status === "timed-out") {
       return "timed-out";

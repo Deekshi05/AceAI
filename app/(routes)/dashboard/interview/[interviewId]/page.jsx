@@ -69,6 +69,20 @@ function InterviewDetails() {
   };
 
   const getInterviewStatus = () => {
+    // Return default status if interview is not loaded yet
+    if (!interview) {
+      return "scheduled";
+    }
+
+    // Check if interview is explicitly marked as timed-out or completed
+    if (interview.status === "timed-out" || interview.isTimedOut) {
+      return "timed-out";
+    }
+
+    if (interview.status === "completed") {
+      return "completed";
+    }
+
     // If interview has responses for all questions, it's completed
     const totalQuestions = interview.interviewQuestions?.length || 0;
     const answeredQuestions = interview.userResponses?.length || 0;
